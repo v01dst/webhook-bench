@@ -72,11 +72,6 @@ export function benchRoutes(app: FastifyInstance, opts: BenchRoutesOpts): void {
   app.get(
     "/hooks/:id/events",
     {
-      schema: {
-        response: {
-          404: errorResponse,
-        },
-      },
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };
@@ -96,11 +91,6 @@ export function benchRoutes(app: FastifyInstance, opts: BenchRoutesOpts): void {
   app.get(
     "/hooks/:id/events/:eventId",
     {
-      schema: {
-        response: {
-          404: errorResponse,
-        },
-      },
     },
     async (request, reply) => {
       const { id, eventId } = request.params as { id: string; eventId: string };
