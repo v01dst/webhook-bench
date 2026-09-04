@@ -160,6 +160,83 @@ export function benchRoutes(app: FastifyInstance, opts: BenchRoutesOpts): void {
     }
   );
 
+  app.post(
+    "/hooks/:id/events/:eventId/replay",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["target"],
+          properties: {
+            target: { type: "string" },
+            headers: { type: "object", additionalProperties: { type: "string" } },
+          },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              delivered: { type: "boolean" },
+              status: { type: ["number", "null"] },
+              error: { type: ["string", "null"] },
+            },
+            required: ["delivered", "status", "error"],
+          },
+          400: errorResponse,
+          404: errorResponse,
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id, eventId } = request.params as { id: string; eventId: string };
+      const event = bench.getEvent(id, Number(eventId));
+      if (!event) {
+        return reply
+          .status(404)
+          .send({ error: `event ${eventId} not found in hook "${id}"` });
+      }
+      const body = request.body as {
+        target: string;
+        headers?: Record<string, string>;
+      };
+      if (!/^https?:\/\//.test(body.target)) {
+        return reply
+          .status(400)
+          .send({ error: "target must be an http(s) url" });
+      }
+
+      const outboundHeaders: Record<string, string> = JSON.parse(event.headers);
+      delete outboundHeaders.host;
+      delete outboundHeaders["content-length"];
+      delete outboundHeaders.connection;
+      for (const [k, v] of Object.entries(body.headers ?? {})) {
+        outboundHeaders[k.toLowerCase()] = v;
+      }
+
+      try {
+        const res = await fetch(body.target, {
+          method: event.method,
+          headers: outboundHeaders,
+          body:
+            event.body && event.method !== "GET" && event.method !== "HEAD"
+              ? event.body
+              : undefined,
+        });
+        return reply.status(200).send({
+          delivered: true,
+          status: res.status,
+          error: null,
+        });
+      } catch (err) {
+        return reply.status(200).send({
+          delivered: false,
+          status: null,
+          error: (err as Error).message.slice(0, 200),
+        });
+      }
+    }
+  );
+
   app.all(
     "/hook/:id",
     {

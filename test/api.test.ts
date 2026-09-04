@@ -135,3 +135,92 @@ describe("meta", () => {
     expect(res.json().service).toBe("webhook-bench");
   });
 });
+
+describe("replay", () => {
+  it("replays a captured event to a live local target", async () => {
+    const app2 = createApp({ config: {} });
+    await app2.listen({ port: 0, host: "127.0.0.1" });
+    const addr = app2.server.address();
+    const port = typeof addr === "object" && addr ? addr.port : 0;
+
+    const target = await app2.inject({ method: "POST", url: "/hooks" });
+    const targetId = target.json().id;
+
+    const source = await app2.inject({ method: "POST", url: "/hooks" });
+    const sourceId = source.json().id;
+    await app2.inject({
+      method: "POST",
+      url: `/hook/${sourceId}`,
+      payload: { kind: "payment", amount: 7 },
+    });
+    const list = await app2.inject({ url: `/hooks/${sourceId}/events` });
+    const eventId = list.json().events[0].id;
+
+    const replay = await app2.inject({
+      method: "POST",
+      url: `/hooks/${sourceId}/events/${eventId}/replay`,
+      payload: { target: `http://127.0.0.1:${port}/hook/${targetId}` },
+    });
+    expect(replay.statusCode).toBe(200);
+    const body = replay.json();
+    expect(body.delivered).toBe(true);
+    expect(body.status).toBe(200);
+
+    const delivered = await app2.inject({ url: `/hooks/${targetId}/events` });
+    expect(delivered.json().count).toBe(1);
+    const detail = await app2.inject({
+      url: `/hooks/${targetId}/events/${delivered.json().events[0].id}`,
+    });
+    expect(detail.json().body.text).toContain("payment");
+    await app2.close();
+  });
+
+  it("rejects non-http targets", async () => {
+    const app2 = createApp({ config: {} });
+    const source = await app2.inject({ method: "POST", url: "/hooks" });
+    const sourceId = source.json().id;
+    await app2.inject({ method: "POST", url: `/hook/${sourceId}`, payload: "x" });
+    const list = await app2.inject({ url: `/hooks/${sourceId}/events` });
+    const eventId = list.json().events[0].id;
+
+    const replay = await app2.inject({
+      method: "POST",
+      url: `/hooks/${sourceId}/events/${eventId}/replay`,
+      payload: { target: "ftp://nope" },
+    });
+    expect(replay.statusCode).toBe(400);
+    await app2.close();
+  });
+
+  it("reports unreachable targets without throwing", async () => {
+    const app2 = createApp({ config: {} });
+    const source = await app2.inject({ method: "POST", url: "/hooks" });
+    const sourceId = source.json().id;
+    await app2.inject({ method: "POST", url: `/hook/${sourceId}`, payload: "x" });
+    const list = await app2.inject({ url: `/hooks/${sourceId}/events` });
+    const eventId = list.json().events[0].id;
+
+    const replay = await app2.inject({
+      method: "POST",
+      url: `/hooks/${sourceId}/events/${eventId}/replay`,
+      payload: { target: "http://127.0.0.1:9/unreachable" },
+    });
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json().delivered).toBe(false);
+    expect(replay.json().error).toBeTruthy();
+    await app2.close();
+  });
+
+  it("404s unknown events", async () => {
+    const app2 = createApp({ config: {} });
+    const source = await app2.inject({ method: "POST", url: "/hooks" });
+    const sourceId = source.json().id;
+    const replay = await app2.inject({
+      method: "POST",
+      url: `/hooks/${sourceId}/events/999/replay`,
+      payload: { target: "http://localhost/x" },
+    });
+    expect(replay.statusCode).toBe(404);
+    await app2.close();
+  });
+});
