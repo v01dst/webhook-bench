@@ -130,13 +130,6 @@ export class Bench {
     ).n;
   }
 
-  countEvents(hookId: string): number {
-    return (
-      this.db
-        .prepare("SELECT COUNT(*) AS n FROM events WHERE hook_id = ?")
-        .get(hookId) as { n: number }
-    ).n;
-  }
 
   pruneOldEvents(hours: number): number {
     const info = this.db
