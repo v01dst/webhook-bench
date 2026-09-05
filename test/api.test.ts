@@ -224,3 +224,50 @@ describe("replay", () => {
     await app2.close();
   });
 });
+
+describe("event text search", () => {
+  it("filters events by body text", async () => {
+    const app2 = createApp({ config: {} });
+    const hook = await app2.inject({ method: "POST", url: "/hooks" });
+    const id = hook.json().id;
+    await app2.inject({
+      method: "POST",
+      url: `/hook/${id}`,
+      payload: { event: "push", repo: "alpha" },
+    });
+    await app2.inject({
+      method: "POST",
+      url: `/hook/${id}`,
+      payload: { event: "release", repo: "beta" },
+    });
+
+    const res = await app2.inject({ url: `/hooks/${id}/events`, query: { q: "release" } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.count).toBe(1);
+    expect(body.events).toHaveLength(1);
+    await app2.close();
+  });
+
+  it("search matches path and query too", async () => {
+    const app2 = createApp({ config: {} });
+    const hook = await app2.inject({ method: "POST", url: "/hooks" });
+    const id = hook.json().id;
+    await app2.inject({ method: "POST", url: `/hook/${id}?ref=main` });
+    await app2.inject({ method: "POST", url: `/hook/${id}?ref=dev` });
+    const res = await app2.inject({ url: `/hooks/${id}/events`, query: { q: "main" } });
+    expect(res.json().count).toBe(1);
+    await app2.close();
+  });
+
+  it("returns empty for non-matching search", async () => {
+    const app2 = createApp({ config: {} });
+    const hook = await app2.inject({ method: "POST", url: "/hooks" });
+    const id = hook.json().id;
+    await app2.inject({ method: "POST", url: `/hook/${id}`, payload: "hello" });
+    const res = await app2.inject({ url: `/hooks/${id}/events`, query: { q: "zzzznotfound" } });
+    expect(res.json().count).toBe(0);
+    expect(res.json().events).toEqual([]);
+    await app2.close();
+  });
+});

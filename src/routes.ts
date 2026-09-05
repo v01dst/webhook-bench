@@ -78,13 +78,14 @@ export function benchRoutes(app: FastifyInstance, opts: BenchRoutesOpts): void {
       if (!bench.getHook(id)) {
         return reply.status(404).send({ error: `hook "${id}" not found` });
       }
-      const query = request.query as { limit?: string };
+      const query = request.query as { limit?: string; q?: string };
       const limit = Math.min(Number(query.limit) || 50, 100);
-      const events = bench.listEvents(id, limit).map((e) => ({
+      const q = typeof query.q === "string" ? query.q : undefined;
+      const events = bench.listEvents(id, limit, q).map((e) => ({
         ...e,
         headers: JSON.parse(e.headers) as Record<string, string>,
       }));
-      return reply.status(200).send({ count: bench.countEvents(id), events });
+      return reply.status(200).send({ count: bench.countEvents(id, q), events });
     }
   );
 

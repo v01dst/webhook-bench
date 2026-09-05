@@ -12,7 +12,6 @@
 ![Tests](https://img.shields.io/badge/tests-10%20passing-brightgreen)
 
 `github` · `stripe` · `slack` · `any integration` · `any payload`
-
 </div>
 
 ---
@@ -115,7 +114,5 @@ Built with ⚡ by **v01dst**
 
 [![GitHub](https://img.shields.io/badge/github-v01dst-181717?logo=github)](https://github.com/v01dst)
 [![Discord](https://img.shields.io/badge/discord-9p.1-5865F2?logo=discord&logoColor=white)](https://discord.com/users/9p.1)
-
-*Project 012 / 99 — The Loop*
 
 </div>

@@ -91,13 +91,43 @@ export class Bench {
       .get(hookId, eventId) as EventRow | undefined;
   }
 
-  listEvents(hookId: string, limit = 50): Omit<EventRow, "body">[] {
+  listEvents(hookId: string, limit = 50, contains?: string): Omit<EventRow, "body">[] {
+    if (contains !== undefined && contains !== "") {
+      const needle = `%${contains}%`;
+      return this.db
+        .prepare(
+          `SELECT id, hook_id, received_at, method, path, query, headers, body_size
+           FROM events
+           WHERE hook_id = ? AND (CAST(body AS TEXT) LIKE ? OR path LIKE ? OR query LIKE ?)
+           ORDER BY id DESC LIMIT ?`
+        )
+        .all(hookId, needle, needle, needle, limit) as Omit<EventRow, "body">[];
+    }
     return this.db
       .prepare(
         `SELECT id, hook_id, received_at, method, path, query, headers, body_size
          FROM events WHERE hook_id = ? ORDER BY id DESC LIMIT ?`
       )
       .all(hookId, limit) as Omit<EventRow, "body">[];
+  }
+
+  countEvents(hookId: string, contains?: string): number {
+    if (contains !== undefined && contains !== "") {
+      const needle = `%${contains}%`;
+      return (
+        this.db
+          .prepare(
+            `SELECT COUNT(*) AS n FROM events
+             WHERE hook_id = ? AND (CAST(body AS TEXT) LIKE ? OR path LIKE ? OR query LIKE ?)`
+          )
+          .get(hookId, needle, needle, needle) as { n: number }
+      ).n;
+    }
+    return (
+      this.db
+        .prepare("SELECT COUNT(*) AS n FROM events WHERE hook_id = ?")
+        .get(hookId) as { n: number }
+    ).n;
   }
 
   countEvents(hookId: string): number {
